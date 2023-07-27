@@ -1,12 +1,16 @@
 <template>
   <div id="editor">
     <editor-content :editor="editor"/>
+    <input type="file" ref="fileInput" style="display: none" @change="onFileChange" :accept="ALLOWED_TYPES().toString()"/>
+    <button @click="openFileInput">Add img</button>
   </div>
 </template>
 
 <script>
 import {Editor, EditorContent} from '@tiptap/vue-3'
 import StarterKit from '@tiptap/starter-kit'
+import Image from "@tiptap/extension-image";
+import {ALLOWED_TYPES, MAX_HEIGHT, MAX_SIZE_MB, MAX_WIDTH} from "@/shared/lib/ImgConsts";
 
 export default {
   components: {
@@ -27,60 +31,83 @@ export default {
         Image
       ],
       editorProps: {
-        handlePaste: function(view, event, slice) {
-          const items = Array.from(event.clipboardData?.items || []);
-          console.log(items);
-          for (const item of items) {
-            if (item.type.indexOf("image") === 0) {
-              const file = item.getAsFile();
-              let filesize = ((file.size/1024)/1024).toFixed(4); // get the filesize in MB
-              console.log(filesize);
-              if (filesize < 10) { // check image under 10MB
-                // check the dimensions
-                let _URL = window.URL || window.webkitURL;
-                let img = new Image(); /* global Image */
-                img.src = _URL.createObjectURL(item);
-                img.onload = function () {
-                  if (this.width > 5000 || this.height > 5000) {
-                    window.alert("Your images need to be less than 5000 pixels in height and width."); // display alert
-                  } else {
-                    // valid image so upload to server
-                    // uploadImage will be your function to upload the image to the server or s3 bucket somewhere
-                    uploadImage(file).then(function(response) { // response is the image url for where it has been saved
-                      // do something with the response
-                    }).catch(function(error) {
-                      if (error) {
-                        window.alert("There was a problem uploading your image, please try again.");
-                      }
-                    });
-                  }
-                };
-              } else {
-                window.alert("Images need to be in jpg or png format and less than 10mb in size.");
-              }
-              return true; // handled
-            }
-          }
-          return false; // not handled use default behaviour
-        }
+        handlePaste: this.handlePaste
       }
     })
   },
 
+  methods: {
+    ALLOWED_TYPES() {
+      return ALLOWED_TYPES
+    },
+    openFileInput() {
+      this.$refs.fileInput.click();
+    },
+
+    onFileChange(event) {
+      const file = event.target.files[0];
+      if (file) {
+        this.editor.chain().focus().setImage({src: URL.createObjectURL(file)}).run();
+      }
+    },
+
+    handlePaste(view, event, slice) {
+      const items = Array.from(event.clipboardData?.items || []);
+      for (const item of items) {
+        if (ALLOWED_TYPES.includes(item.type)) {
+          const file = item.getAsFile();
+          let filesize = ((file.size / 1024) / 1024).toFixed(4);
+          console.log(filesize);
+          if (filesize < MAX_SIZE_MB) { // check image under 10MB
+            let img = document.createElement("img");
+            img.src = URL.createObjectURL(file);
+            img.onload = () => {
+              if (this.width > MAX_WIDTH || this.height > MAX_HEIGHT) {
+                window.alert(`Your images need to be less than ${MAX_HEIGHT} pixels in height ${MAX_WIDTH} pixels and width.`); // display alert
+              } else {
+                this.uploadImage(file);
+                this.editor.chain().focus().setImage({src: img.src}).run();
+              }
+            };
+          } else {
+            window.alert(`Images need to be in jpg or png format and less than ${MAX_SIZE_MB}mb in size.`);
+          }
+          return true;
+        }
+      }
+      return false;
+    },
+
+    async uploadImage(file) {
+
+    }
+
+  },
+
   beforeUnmount() {
-    this.editor.destroy()
+    this.editor.destroy();
   },
 }
 </script>
 
 <style scoped>
-  #editor {
-    width: 50%;
-    border: 1px solid var(--color-border);
-  }
-  #editor :deep(.ProseMirror) {
-    padding: 15px;
-    border-radius: unset;
-    min-height: 320px;
-  }
+#editor {
+  width: 50%;
+}
+
+#editor :deep(.ProseMirror) {
+  padding: 15px;
+  border-radius: unset;
+  min-height: 320px;
+  border: 1px solid var(--color-border);
+}
+
+#editor :deep(img) {
+  max-width: 100%;
+}
+
+#editor :deep(img.ProseMirror-selectednode) {
+  border: 1px solid red;
+}
+
 </style>
