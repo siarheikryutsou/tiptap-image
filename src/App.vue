@@ -1,9 +1,11 @@
-<script setup>
-import TipTapEditor from "@/components/TipTapEditor.vue";
+<script setup lang="ts">
+
 </script>
 
 <template>
-  <TipTapEditor />
+  <main>
+    <h1>Hello World</h1>
+  </main>
 </template>
 
 <style scoped>
