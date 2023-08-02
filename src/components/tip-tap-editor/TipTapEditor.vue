@@ -16,6 +16,7 @@ import StarterKit from '@tiptap/starter-kit';
 import Image from '@tiptap/extension-image';
 import Focus from '@tiptap/extension-focus';
 import {defineComponent, ref} from "vue";
+import {EditorView} from "prosemirror-view";
 
 const {} = defineComponent({
   components: {
@@ -47,16 +48,28 @@ const onFileSelect = (event: Event): void => {
   const input: HTMLInputElement = event.target as HTMLInputElement;
   if (input && input.files) {
     const [file] = input.files;
-    if (file) {
-      checkFile(file).then((url: string) => {
-        appendImage(url);
-      });
-    }
+    checkFile(file)
+        .then(onFileValid)
+        .catch((reason:string) => {
+          console.error(reason);
+        });
   }
 }
 
-const onPaste = (): boolean => {
-  console.log("onPaste");
+const onPaste = (view:EditorView, event:ClipboardEvent):boolean => {
+  console.log("onPaste")
+  const items:DataTransferItem[] = Array.from(event.clipboardData?.items || []);
+  for (const item of items) {
+    if (allowedTypes.includes(item.type)) {
+      const file = item.getAsFile();
+      checkFile(file)
+          .then(onFileValid)
+          .catch((reason:string) => {
+            console.error(reason);
+          });
+      return true;
+    }
+  }
   return false;
 }
 
@@ -66,17 +79,24 @@ const onDrop = (): boolean => {
 }
 
 
-const checkFile = async (file: File): Promise<string> => {
+const checkFile = async (file: File | null): Promise<string> => {
   return await new Promise((resolve, reject) => {
+    if(!file) {
+      reject("File not exists");
+      return;
+    }
+
     const fileSizeInMb = file.size / 1024 / 1024;
     if (fileSizeInMb > MAX_FILE_SIZE_IN_MB) {
       showFileSizeAlert(fileSizeInMb);
-      reject();
+      reject("File size limit");
+      return;
     }
 
     if (!allowedTypes.includes(file.type)) {
       showFileWrongTypeAlert(file.type);
-      reject();
+      reject("Wrong file type");
+      return;
     }
 
     const img = document.createElement("img");
@@ -85,11 +105,18 @@ const checkFile = async (file: File): Promise<string> => {
       if (img.width > MAX_IMG_WIDTH || img.height > MAX_IMG_HEIGHT) {
         const url = resizeImage(img);
         resolve(url);
+        return;
       } else {
         resolve(img.src);
+        return;
       }
     }
   })
+}
+
+
+const onFileValid = (url: string) => {
+  appendImage(url);
 }
 
 
