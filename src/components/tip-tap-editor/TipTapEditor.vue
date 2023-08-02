@@ -73,8 +73,17 @@ const onPaste = (view:EditorView, event:ClipboardEvent):boolean => {
   return false;
 }
 
-const onDrop = (): boolean => {
+const onDrop = (view: EditorView, event: DragEvent, slice: unknown, moved: boolean): boolean => {
   console.log("onDrop");
+  if (!moved && event.dataTransfer?.files?.length) {
+    const [file] = event.dataTransfer.files;
+    checkFile(file)
+        .then(onFileValid)
+        .catch((reason:string) => {
+          console.error(reason);
+        });
+    return true;
+  }
   return false;
 }
 
