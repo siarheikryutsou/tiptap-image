@@ -8,6 +8,7 @@
       <button @click="onSaveClick">Save</button>
     </div>
   </div>
+  <img class="preloader" ref="elPreloader" src="/preloader.svg" alt="preloader"/>
 </template>
 
 <script setup lang="ts">
@@ -35,6 +36,7 @@ const MAX_FILE_SIZE_IN_MB: number = 15;
 const MAX_IMG_WIDTH: number = 2500;
 const MAX_IMG_HEIGHT: number = 2500;
 const elInputFile = ref<HTMLInputElement>();
+const elPreloader = ref<HTMLImageElement>();
 
 const onAddImageButtonClick = (): void => {
   elInputFile.value?.click();
@@ -78,6 +80,7 @@ const onDrop = (view: unknown, event: DragEvent, slice: unknown, moved: boolean)
 
 const onFilesInput = async (files: FileList | File[] | null): Promise<boolean> => {
   if (!files?.length) return false;
+  togglePreloader(true);
   const filesList: File[] = files instanceof FileList ? Array.from(files) : files;
 
   for (const file of filesList) {
@@ -116,10 +119,10 @@ const processFile = async (file: File): Promise<string> => {
   const img = document.createElement("img");
   img.src = URL.createObjectURL(file);
   return await new Promise((resolve) => {
-    img.onload = () => {
+    img.onload = async () => {
       if (img.width > MAX_IMG_WIDTH || img.height > MAX_IMG_HEIGHT) {
-        const url = resizeImage(img);
-        resolve(url);
+        const blob = await resizeImage(img);
+        resolve(URL.createObjectURL(blob));
       } else {
         resolve(img.src);
       }
@@ -129,22 +132,36 @@ const processFile = async (file: File): Promise<string> => {
 
 
 const appendImage = (url: string): void => {
-    editor.commands.setImage({src: url});
-    editor.commands.createParagraphNear()
+  editor.commands.setImage({src: url});
+  editor.commands.createParagraphNear();
+  togglePreloader(false);
 }
 
 
-const resizeImage = (img: HTMLImageElement): string => {
-  const canvas: HTMLCanvasElement = document.createElement("canvas");
-  const ctx: CanvasRenderingContext2D | null = canvas.getContext("2d");
+const resizeImage = async (img: HTMLImageElement): Promise<Blob> => {
   const scaleRatio: number = Math.min(MAX_IMG_WIDTH / img.width, MAX_IMG_HEIGHT / img.height);
   const newWidth: number = Math.floor(img.width * scaleRatio);
   const newHeight: number = Math.floor(img.height * scaleRatio);
-  canvas.width = newWidth;
-  canvas.height = newHeight;
+  //@ts-ignore
+  const canvas: OffscreenCanvas = new OffscreenCanvas(newWidth, newHeight);
+  const ctx: CanvasRenderingContext2D | null = canvas.getContext("2d");
+  //canvas.width = newWidth;
+  //canvas.height = newHeight;
   ctx?.drawImage(img, 0, 0, newWidth, newHeight);
-  return canvas.toDataURL();
+  return await canvas.convertToBlob()
 }
+
+
+const togglePreloader = (force?: boolean): boolean => {
+  if (force !== undefined) {
+    elPreloader?.value?.style && (elPreloader.value.style.display = force ? "block" : "none");
+    return force;
+  }
+
+  const currentValue: string | undefined = elPreloader?.value?.style?.display;
+  elPreloader?.value?.style && (elPreloader.value.style.display = currentValue === "none" ? "block" : "none");
+  return currentValue !== "block";
+};
 
 
 const onSaveClick = (): void => {
@@ -206,6 +223,14 @@ const editor: Editor = new Editor({
   & button {
     margin-right: 5px;
   }
+}
+
+.preloader {
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  margin: -100px;
+  display: none;
 }
 
 </style>
