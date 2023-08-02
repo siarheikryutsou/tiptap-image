@@ -8,7 +8,7 @@
       <button @click="onSaveClick">Save</button>
     </div>
   </div>
-  <img class="preloader" ref="elPreloader" src="/preloader.svg" alt="preloader"/>
+  <img v-if="showPreloader" class="preloader" src="/preloader.svg" alt="preloader"/>
 </template>
 
 <script setup lang="ts">
@@ -36,7 +36,7 @@ const MAX_FILE_SIZE_IN_MB: number = 15;
 const MAX_IMG_WIDTH: number = 2500;
 const MAX_IMG_HEIGHT: number = 2500;
 const elInputFile = ref<HTMLInputElement>();
-const elPreloader = ref<HTMLImageElement>();
+let showPreloader = ref<boolean>(false);
 
 const onAddImageButtonClick = (): void => {
   elInputFile.value?.click();
@@ -145,8 +145,6 @@ const resizeImage = async (img: HTMLImageElement): Promise<Blob> => {
   //@ts-ignore
   const canvas: OffscreenCanvas = new OffscreenCanvas(newWidth, newHeight);
   const ctx: CanvasRenderingContext2D | null = canvas.getContext("2d");
-  //canvas.width = newWidth;
-  //canvas.height = newHeight;
   ctx?.drawImage(img, 0, 0, newWidth, newHeight);
   return await canvas.convertToBlob()
 }
@@ -154,13 +152,11 @@ const resizeImage = async (img: HTMLImageElement): Promise<Blob> => {
 
 const togglePreloader = (force?: boolean): boolean => {
   if (force !== undefined) {
-    elPreloader?.value?.style && (elPreloader.value.style.display = force ? "block" : "none");
+    showPreloader.value = force;
     return force;
   }
-
-  const currentValue: string | undefined = elPreloader?.value?.style?.display;
-  elPreloader?.value?.style && (elPreloader.value.style.display = currentValue === "none" ? "block" : "none");
-  return currentValue !== "block";
+  showPreloader.value = !showPreloader.value;
+  return showPreloader.value;
 };
 
 
@@ -171,6 +167,7 @@ const onSaveClick = (): void => {
 
 const save = (): void => {
   console.log(editor.getJSON());
+  togglePreloader(true);
 }
 
 
@@ -230,7 +227,6 @@ const editor: Editor = new Editor({
   top: 50%;
   left: 50%;
   margin: -100px;
-  display: none;
 }
 
 </style>
