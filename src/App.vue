@@ -1,5 +1,5 @@
-<script setup>
-import TipTapEditor from "@/components/TipTapEditor.vue";
+<script setup lang="ts">
+import TipTapEditor from "@/components/tip-tap-editor/TipTapEditor.vue";
 </script>
 
 <template>
@@ -7,5 +7,4 @@ import TipTapEditor from "@/components/TipTapEditor.vue";
 </template>
 
 <style scoped>
-
 </style>
