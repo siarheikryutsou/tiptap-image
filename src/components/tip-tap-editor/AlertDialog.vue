@@ -1,7 +1,7 @@
 <template>
   <dialog ref="dialogRef">
     <p>{{ messageRef }}</p>
-    <button class="btn-ok" @click="close()">Ok</button>
+    <button @click="close()">Ok</button>
   </dialog>
 </template>
 
@@ -34,12 +34,6 @@ defineExpose({
   dialog {
     min-width: 250px;
     max-width: 400px;
-  }
-
-  .btn-ok {
-    margin-top: 20px;
-    float: right;
-    min-width: 50px;
   }
 
 </style>
