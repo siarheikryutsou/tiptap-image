@@ -48,13 +48,20 @@ const onAddImageButtonClick = (): void => {
 
 const showAlert = (message:string):void => {
   showDialogRef.value = true;
-  alertRef.value?.show(message);
+  alertRef.value?.show(message, onAlertClose);
 }
+
+
+const onAlertClose = ():void => {
+  showDialogRef.value = false;
+}
+
 
 const onFileSelect = (event: Event): void => {
   const input: HTMLInputElement = event.target as HTMLInputElement;
   if (input && input.files) {
     onFilesInput(input.files);
+    input.value = "";
   }
 }
 
