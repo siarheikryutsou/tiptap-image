@@ -9,6 +9,7 @@
     </div>
   </div>
   <img v-if="showPreloader" class="preloader" src="/preloader.svg" alt="preloader"/>
+  <AlertDialog v-show="showDialogRef" ref="alertRef" />
 </template>
 
 <script setup lang="ts">
@@ -17,17 +18,17 @@ import StarterKit from '@tiptap/starter-kit';
 import Image from '@tiptap/extension-image';
 import Focus from '@tiptap/extension-focus';
 import {defineComponent, ref} from "vue";
+import AlertDialog from "@/components/tip-tap-editor/AlertDialog.vue";
 
 defineComponent({
   components: {
-    EditorContent,
+    EditorContent
   }
 });
 
 const allowedTypes: string[] = [
   "image/gif",
   "image/jpeg",
-  "image/jpg",
   "image/png",
   "image/tiff",
   "image/webp"
@@ -36,10 +37,18 @@ const MAX_FILE_SIZE_IN_MB: number = 15;
 const MAX_IMG_WIDTH: number = 2500;
 const MAX_IMG_HEIGHT: number = 2500;
 const elInputFile = ref<HTMLInputElement>();
-let showPreloader = ref<boolean>(false);
+const showPreloader = ref<boolean>(false);
+const alertRef = ref<AlertDialog>();
+const showDialogRef = ref<boolean>(false);
 
 const onAddImageButtonClick = (): void => {
   elInputFile.value?.click();
+}
+
+
+const showAlert = (message:string):void => {
+  showDialogRef.value = true;
+  alertRef.value?.show(message);
 }
 
 const onFileSelect = (event: Event): void => {
@@ -80,13 +89,13 @@ const onDrop = (view: unknown, event: DragEvent, slice: unknown, moved: boolean)
 
 const onFilesInput = async (files: FileList | File[] | null): Promise<boolean> => {
   if (!files?.length) return false;
-  togglePreloader(true);
+
   const filesList: File[] = files instanceof FileList ? Array.from(files) : files;
 
   for (const file of filesList) {
     await checkFile(file)
         .then((url: string) => appendImage(url))
-        .catch((reason: string) => alert(reason));
+        .catch((reason: string) => showAlert(reason));
   }
   return false;
 }
@@ -110,6 +119,8 @@ const checkFile = async (file: File | null): Promise<string> => {
   if (fileSizeInMb > MAX_FILE_SIZE_IN_MB) {
     return Promise.reject(`Image ${file.name} need to be less than ${MAX_FILE_SIZE_IN_MB}mb in size. Your file is ${fileSizeInMb.toFixed(2)}Mb`);
   }
+
+  togglePreloader(true);
 
   return await processFile(file);
 }
@@ -216,10 +227,10 @@ const editor: Editor = new Editor({
 
 #editor .controls {
   margin-top: 10px;
+}
 
-  & button {
-    margin-right: 5px;
-  }
+#editor .controls button {
+  margin-right: 5px;
 }
 
 .preloader {
