@@ -38,7 +38,7 @@ const MAX_IMG_WIDTH: number = 2500;
 const MAX_IMG_HEIGHT: number = 2500;
 const elInputFile = ref<HTMLInputElement>();
 const showPreloader = ref<boolean>(false);
-const alertRef = ref<AlertDialog>();
+const alertRef = ref<typeof AlertDialog>();
 const showDialogRef = ref<boolean>(false);
 
 const onAddImageButtonClick = (): void => {
