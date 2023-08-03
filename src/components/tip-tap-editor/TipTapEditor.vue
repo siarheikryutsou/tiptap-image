@@ -3,11 +3,13 @@
     <editor-content :editor="editor"/>
     <div class="controls">
       <input type="file" ref="elInputFile" style="display: none" @change="onFileSelect"
-             :accept="allowedTypes.toString()"/>
+             :accept="allowedTypes.toString()" multiple/>
       <button @click="onAddImageButtonClick">Add img</button>
       <button @click="onSaveClick">Save</button>
     </div>
   </div>
+  <img v-if="showPreloader" class="preloader" src="/preloader.svg" alt="preloader"/>
+  <AlertDialog v-show="showDialogRef" ref="alertRef" />
 </template>
 
 <script setup lang="ts">
@@ -16,170 +18,182 @@ import StarterKit from '@tiptap/starter-kit';
 import Image from '@tiptap/extension-image';
 import Focus from '@tiptap/extension-focus';
 import {defineComponent, ref} from "vue";
-import {EditorView} from "prosemirror-view";
+import AlertDialog from "@/components/tip-tap-editor/AlertDialog.vue";
 
-const {} = defineComponent({
+defineComponent({
   components: {
-    EditorContent,
+    EditorContent
   }
 });
 
-
 const allowedTypes: string[] = [
-  "image/bmp",
   "image/gif",
   "image/jpeg",
-  "image/jpg",
   "image/png",
   "image/tiff",
-  "image/webp",
-  "image/x-icon",
+  "image/webp"
 ];
 const MAX_FILE_SIZE_IN_MB: number = 15;
 const MAX_IMG_WIDTH: number = 2500;
 const MAX_IMG_HEIGHT: number = 2500;
 const elInputFile = ref<HTMLInputElement>();
+const showPreloader = ref<boolean>(false);
+const alertRef = ref<typeof AlertDialog>();
+const showDialogRef = ref<boolean>(false);
 
 const onAddImageButtonClick = (): void => {
   elInputFile.value?.click();
 }
 
+
+const showAlert = (message:string):void => {
+  showDialogRef.value = true;
+  alertRef.value?.show(message);
+}
+
 const onFileSelect = (event: Event): void => {
   const input: HTMLInputElement = event.target as HTMLInputElement;
   if (input && input.files) {
-    const [file] = input.files;
-    checkFile(file)
-        .then(onFileValid)
-        .catch((reason:string) => {
-          console.error(reason);
-        });
+    onFilesInput(input.files);
   }
 }
 
-const onPaste = (view:EditorView, event:ClipboardEvent):boolean => {
-  console.log("onPaste")
-  const items:DataTransferItem[] = Array.from(event.clipboardData?.items || []);
+const onPaste = (view: unknown, event: ClipboardEvent): boolean => {
+  const items: DataTransferItem[] = Array.from(event.clipboardData?.items || []);
+  const files: File[] = [];
+
   for (const item of items) {
-    if (allowedTypes.includes(item.type)) {
+    if (isAllowedType(item.type)) {
       const file = item.getAsFile();
-      checkFile(file)
-          .then(onFileValid)
-          .catch((reason:string) => {
-            console.error(reason);
-          });
-      return true;
+      if (file) files.push(file);
     }
   }
+
+  if (files.length) {
+    onFilesInput(files);
+    return true;
+  }
+
   return false;
 }
 
-const onDrop = (view: EditorView, event: DragEvent, slice: unknown, moved: boolean): boolean => {
+const onDrop = (view: unknown, event: DragEvent, slice: unknown, moved: boolean): boolean => {
   console.log("onDrop");
   if (!moved && event.dataTransfer?.files?.length) {
-    const [file] = event.dataTransfer.files;
-    checkFile(file)
-        .then(onFileValid)
-        .catch((reason:string) => {
-          console.error(reason);
-        });
+    onFilesInput(event.dataTransfer.files);
     return true;
   }
   return false;
 }
 
 
+const onFilesInput = async (files: FileList | File[] | null): Promise<boolean> => {
+  if (!files?.length) return false;
+
+  const filesList: File[] = files instanceof FileList ? Array.from(files) : files;
+
+  for (const file of filesList) {
+    await checkFile(file)
+        .then((url: string) => appendImage(url))
+        .catch((reason: string) => showAlert(reason));
+  }
+  return false;
+}
+
+
+const isAllowedType = (type: string): boolean => {
+  return allowedTypes.includes(type);
+}
+
+
 const checkFile = async (file: File | null): Promise<string> => {
-  return await new Promise((resolve, reject) => {
-    if(!file) {
-      reject("File not exists");
-      return;
-    }
+  if (!file) {
+    return Promise.reject(`File not exists`);
+  }
 
-    const fileSizeInMb = file.size / 1024 / 1024;
-    if (fileSizeInMb > MAX_FILE_SIZE_IN_MB) {
-      showFileSizeAlert(fileSizeInMb);
-      reject("File size limit");
-      return;
-    }
+  if (!isAllowedType(file.type)) {
+    return Promise.reject(`Image ${file.name} need to be${allowedTypes.toString().split("image/").join(" ")}. Yur image is ${file.type.split("/")[1]}`);
+  }
 
-    if (!allowedTypes.includes(file.type)) {
-      showFileWrongTypeAlert(file.type);
-      reject("Wrong file type");
-      return;
-    }
+  const fileSizeInMb = file.size / 1024 / 1024;
+  if (fileSizeInMb > MAX_FILE_SIZE_IN_MB) {
+    return Promise.reject(`Image ${file.name} need to be less than ${MAX_FILE_SIZE_IN_MB}mb in size. Your file is ${fileSizeInMb.toFixed(2)}Mb`);
+  }
 
-    const img = document.createElement("img");
-    img.src = URL.createObjectURL(file);
-    img.onload = () => {
+  togglePreloader(true);
+
+  return await processFile(file);
+}
+
+
+const processFile = async (file: File): Promise<string> => {
+  const img = document.createElement("img");
+  img.src = URL.createObjectURL(file);
+  return await new Promise((resolve) => {
+    img.onload = async () => {
       if (img.width > MAX_IMG_WIDTH || img.height > MAX_IMG_HEIGHT) {
-        const url = resizeImage(img);
-        resolve(url);
-        return;
+        const blob = await resizeImage(img);
+        resolve(URL.createObjectURL(blob));
       } else {
         resolve(img.src);
-        return;
       }
     }
   })
 }
 
 
-const onFileValid = (url: string) => {
-  appendImage(url);
-}
-
-
 const appendImage = (url: string): void => {
-  editor.chain().focus().setImage({src: url}).run();
+  editor.commands.setImage({src: url});
+  editor.commands.createParagraphNear();
+  togglePreloader(false);
 }
 
 
-const resizeImage = (img: HTMLImageElement): string => {
-  const canvas: HTMLCanvasElement = document.createElement("canvas");
-  const ctx: CanvasRenderingContext2D | null = canvas.getContext("2d");
+const resizeImage = async (img: HTMLImageElement): Promise<Blob> => {
   const scaleRatio: number = Math.min(MAX_IMG_WIDTH / img.width, MAX_IMG_HEIGHT / img.height);
   const newWidth: number = Math.floor(img.width * scaleRatio);
   const newHeight: number = Math.floor(img.height * scaleRatio);
-  canvas.width = newWidth;
-  canvas.height = newHeight;
+  //@ts-ignore
+  const canvas: OffscreenCanvas = new OffscreenCanvas(newWidth, newHeight);
+  const ctx: CanvasRenderingContext2D | null = canvas.getContext("2d");
   ctx?.drawImage(img, 0, 0, newWidth, newHeight);
-  return canvas.toDataURL();
+  return await canvas.convertToBlob()
 }
 
 
-const showFileSizeAlert = (size: number): void => {
-  alert(`Image need to be less than ${MAX_FILE_SIZE_IN_MB}mb in size. Your file is ${size.toFixed(2)}Mb`);
-}
+const togglePreloader = (force?: boolean): boolean => {
+  if (force !== undefined) {
+    showPreloader.value = force;
+    return force;
+  }
+  showPreloader.value = !showPreloader.value;
+  return showPreloader.value;
+};
 
 
-const showFileWrongTypeAlert = (type: string): void => {
-  alert(`Image need to be${allowedTypes.toString().split("image/").join(" ")}. Yur image is ${type.split("/")[1]}`);
-}
-
-
-const onSaveClick = ():void => {
+const onSaveClick = (): void => {
   save();
 }
 
 
-const save = ():void => {
+const save = (): void => {
   console.log(editor.getJSON());
+  togglePreloader(true);
 }
 
-console.log("setup")
 
 const editor: Editor = new Editor({
-  content: '<p>Hello world</p>',
+  content: "",
   extensions: [
-      StarterKit,
-      Image.configure({
-        HTMLAttributes: {
-          class: "user-image"
-        }
-      }),
-      Focus.configure({
-        className: 'focus',
-      })
+    StarterKit,
+    Image.configure({
+      HTMLAttributes: {
+        class: "user-image"
+      }
+    }),
+    Focus.configure({
+      className: 'focus',
+    })
   ],
   editorProps: {
     handlePaste: onPaste,
@@ -213,9 +227,17 @@ const editor: Editor = new Editor({
 
 #editor .controls {
   margin-top: 10px;
-  & button {
-    margin-right: 5px;
-  }
+}
+
+#editor .controls button {
+  margin-right: 5px;
+}
+
+.preloader {
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  margin: -100px;
 }
 
 </style>
