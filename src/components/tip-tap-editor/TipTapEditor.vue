@@ -1,6 +1,6 @@
 <template>
   <div id="editor">
-    <div class="controls">
+    <div class="controls" ref="controlsRef">
       <input type="file" ref="elInputFile" style="display: none" @change="onFileSelect"
              :accept="allowedTypes.toString()" multiple/>
       <button ref="addImageButtonRef" @click="onAddImageButtonClick">Add img</button>
@@ -51,6 +51,7 @@ const contextRef = ref<typeof ContextMenu>();
 const addImageButtonRef = ref<HTMLButtonElement>()
 const showURLDialogRef = ref<boolean>();
 const urlDialogRef = ref<typeof URLDialog>();
+const controlsRef = ref<HTMLElement>();
 let id = 0;
 
 const onAddImageButtonClick = (event: Event): void => {
@@ -266,8 +267,31 @@ const imageToBase64 = async (img: HTMLImageElement): Promise<string> => {
 }
 
 
+const setEditable = (editable:boolean):void => {
+  editor.setEditable(editable);
+  if(controlsRef.value?.children) {
+    const controlsList:Element[] = Array.from(controlsRef.value?.children);
+    controlsList.forEach((el:Element) => {
+      if(editable) {
+        el.removeAttribute("disabled");
+      } else {
+        el.setAttribute("disabled", "true");
+      }
+    });
+  }
+}
+
+
+const confirmLeave = (event:BeforeUnloadEvent):void => {
+  event.preventDefault();
+  event.returnValue = "";
+}
+
+
 const save = async (): Promise<void> => {
   togglePreloader(true);
+  setEditable(false);
+  window.addEventListener("beforeunload", confirmLeave);
   const json = {...editor.getJSON()};
 
   if (json.content) {
@@ -288,8 +312,6 @@ const save = async (): Promise<void> => {
     }
   }
 
-  console.log("json", json);
-
   fetch("/api/upload_article/", {
     method: "POST",
     body: JSON.stringify(json),
@@ -306,6 +328,8 @@ const save = async (): Promise<void> => {
       })
       .finally(() => {
         togglePreloader(false);
+        setEditable(true);
+        window.removeEventListener("beforeunload", confirmLeave);
       });
 }
 
