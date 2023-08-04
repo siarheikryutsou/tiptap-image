@@ -41,7 +41,6 @@ const allowedTypes: string[] = [
 const MAX_FILE_SIZE_IN_MB: number = 15;
 const MAX_IMG_WIDTH: number = 2500;
 const MAX_IMG_HEIGHT: number = 2500;
-const URL_PATTERN:RegExp = new RegExp("^https?\\:\\/\\/[^/]+fantlab\\.(ru|org)\\/");
 const elInputFile = ref<HTMLInputElement>();
 const showPreloader = ref<boolean>(false);
 const alertRef = ref<typeof AlertDialog>();
@@ -267,12 +266,12 @@ const imageToBase64 = async (img: HTMLImageElement): Promise<string> => {
 }
 
 
-const setEditable = (editable:boolean):void => {
+const setEditable = (editable: boolean): void => {
   editor.setEditable(editable);
-  if(controlsRef.value?.children) {
-    const controlsList:Element[] = Array.from(controlsRef.value?.children);
-    controlsList.forEach((el:Element) => {
-      if(editable) {
+  if (controlsRef.value?.children) {
+    const controlsList: Element[] = Array.from(controlsRef.value?.children);
+    controlsList.forEach((el: Element) => {
+      if (editable) {
         el.removeAttribute("disabled");
       } else {
         el.setAttribute("disabled", "true");
@@ -282,7 +281,7 @@ const setEditable = (editable:boolean):void => {
 }
 
 
-const confirmLeave = (event:BeforeUnloadEvent):void => {
+const confirmLeave = (event: BeforeUnloadEvent): void => {
   event.preventDefault();
   event.returnValue = "";
 }
@@ -302,7 +301,7 @@ const save = async (): Promise<void> => {
         const imgID: string = item.attrs?.alt;
         const img = document.querySelector(`img[alt=${imgID}]`);
         if (img) {
-          if (currentSrc.startsWith("blob:") || (currentSrc.startsWith("http") && !URL_PATTERN.test(currentSrc))) {
+          if (currentSrc.startsWith("blob:")) {
             item.attrs = {
               src: await imageToBase64(img as HTMLImageElement)
             }
@@ -312,25 +311,36 @@ const save = async (): Promise<void> => {
     }
   }
 
-  fetch("/api/upload_article/", {
-    method: "POST",
-    body: JSON.stringify(json),
-    headers: {
-      "Content-Type": "application/json"
+  try {
+    const response: Response = await fetch("/api/upload_article/", {
+      method: "POST",
+      body: JSON.stringify(json),
+      headers: {
+        "Content-Type": "application/json"
+      }
+    });
+
+
+    if (!response.ok) {
+      showAlert(`Ошибка при отправке изображения: ${response.status} ${response.statusText}`);
+      onSendingComplete();
+      return;
     }
-  })
-      .then(response => response.json())
-      .then(data => {
-        showAlert("Статья успешно загружена");
-      })
-      .catch((error) => {
-        showAlert(`Ошибка при отправке изображения: ${error}`);
-      })
-      .finally(() => {
-        togglePreloader(false);
-        setEditable(true);
-        window.removeEventListener("beforeunload", confirmLeave);
-      });
+
+    const data = await response.json();
+    showAlert("Статья успешно загружена");
+  } catch (error) {
+    showAlert(`Ошибка при отправке изображения: ${error}`);
+  } finally {
+    onSendingComplete()
+  }
+}
+
+
+const onSendingComplete = (): void => {
+  togglePreloader(false);
+  setEditable(true);
+  window.removeEventListener("beforeunload", confirmLeave);
 }
 
 
