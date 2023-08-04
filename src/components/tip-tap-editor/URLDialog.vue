@@ -26,6 +26,7 @@ const show = (onSubmitCallback:(value:string) => void): void => {
 const close = ():void => {
   dialogRef.value?.close();
   onSubmitCallbackHandler("");
+  if(inputRef.value?.value) inputRef.value.value = "";
 }
 
 
@@ -34,7 +35,7 @@ const submit = ():void => {
   close();
 }
 
-const onInput = (event:InputEvent):void => {
+const onInput = (event:Event):void => {
   const value = inputRef.value?.value;
   const button = submitRef.value;
   if(button) button.disabled = !(value && value.startsWith("http"));

@@ -5,13 +5,13 @@
              :accept="allowedTypes.toString()" multiple/>
       <button ref="addImageButtonRef" @click="onAddImageButtonClick">Add img</button>
       <button @click="onSaveClick">Save</button>
-      <ContextMenu v-show="showContextRef" ref="contextRef" />
+      <ContextMenu v-show="showContextRef" ref="contextRef"/>
     </div>
     <editor-content :editor="editor"/>
   </div>
   <img v-if="showPreloader" class="preloader" src="/preloader.svg" alt="preloader"/>
-  <AlertDialog v-show="showDialogRef" ref="alertRef" />
-  <URLDialog v-show="showURLDialogRef" ref="urlDialogRef" />
+  <AlertDialog v-show="showDialogRef" ref="alertRef"/>
+  <URLDialog v-show="showURLDialogRef" ref="urlDialogRef"/>
 </template>
 
 <script setup lang="ts">
@@ -41,59 +41,61 @@ const allowedTypes: string[] = [
 const MAX_FILE_SIZE_IN_MB: number = 15;
 const MAX_IMG_WIDTH: number = 2500;
 const MAX_IMG_HEIGHT: number = 2500;
+const URL_PATTERN:RegExp = new RegExp("^https?\\:\\/\\/[^/]+fantlab\\.(ru|org)\\/");
 const elInputFile = ref<HTMLInputElement>();
 const showPreloader = ref<boolean>(false);
 const alertRef = ref<typeof AlertDialog>();
 const showDialogRef = ref<boolean>(false);
 const showContextRef = ref<boolean>(false);
-const contextRef = ref<typeof  ContextMenu>();
+const contextRef = ref<typeof ContextMenu>();
 const addImageButtonRef = ref<HTMLButtonElement>()
 const showURLDialogRef = ref<boolean>();
 const urlDialogRef = ref<typeof URLDialog>();
+let id = 0;
 
-const onAddImageButtonClick = (event:Event): void => {
+const onAddImageButtonClick = (event: Event): void => {
   (event.target as HTMLButtonElement).disabled = true;
   contextRef.value?.show(addImageContext, onAddImageContextClosed);
   showContextRef.value = true;
 }
 
-const onAddImageContextClosed = ():void => {
+const onAddImageContextClosed = (): void => {
   const button = addImageButtonRef.value;
-  if(button) button.disabled = false;
+  if (button) button.disabled = false;
   showContextRef.value = false;
 }
 
 
-const pickFile = ():void => {
+const pickFile = (): void => {
   elInputFile.value?.click();
 }
 
-const pickURL = ():void => {
+const pickURL = (): void => {
   showURLDialogRef.value = true;
   urlDialogRef.value?.show(onImageURL);
 }
 
 
-const addImageContext:IContextData = {
+const addImageContext: IContextData = {
   "Загрузить с компьютера": pickFile,
   "Вставить URL": pickURL,
 }
 
 
-const showAlert = (message:string):void => {
+const showAlert = (message: string): void => {
   showDialogRef.value = true;
   alertRef.value?.show(message, onAlertClose);
 }
 
 
-const onAlertClose = ():void => {
+const onAlertClose = (): void => {
   showDialogRef.value = false;
 }
 
 
-const onImageURL = (url:string):void => {
+const onImageURL = (url: string): void => {
   showURLDialogRef.value = false;
-  if(url) {
+  if (url) {
     appendImage(url);
   }
 }
@@ -191,7 +193,7 @@ const processFile = async (file: File): Promise<string> => {
 
 
 const appendImage = (url: string): void => {
-  editor.commands.setImage({src: url});
+  editor.commands.setImage({src: url, alt: `editor-image-${(++id).toString()}`});
   editor.commands.createParagraphNear();
   togglePreloader(false);
 }
@@ -202,10 +204,21 @@ const resizeImage = async (img: HTMLImageElement): Promise<Blob> => {
   const newWidth: number = Math.floor(img.width * scaleRatio);
   const newHeight: number = Math.floor(img.height * scaleRatio);
   //@ts-ignore
-  const canvas: OffscreenCanvas = new OffscreenCanvas(newWidth, newHeight);
-  const ctx: CanvasRenderingContext2D | null = canvas.getContext("2d");
-  ctx?.drawImage(img, 0, 0, newWidth, newHeight);
+  const canvas: OffscreenCanvas = getImageCanvas(img, newWidth, newHeight);
   return await canvas.convertToBlob()
+}
+
+
+//@ts-ignore
+const getImageCanvas = (img: HTMLImageElement, width?: number, height?: number): OffscreenCanvas | null => {
+  width = width || img.width;
+  height = height || img.height;
+
+  //@ts-ignore
+  const canvas: OffscreenCanvas = new OffscreenCanvas(width, height);
+  const ctx: CanvasRenderingContext2D | null = canvas.getContext("2d");
+  ctx?.drawImage(img, 0, 0, width, height);
+  return canvas;
 }
 
 
@@ -224,9 +237,76 @@ const onSaveClick = (): void => {
 }
 
 
-const save = (): void => {
-  console.log(editor.getJSON());
+const imageToBase64 = async (img: HTMLImageElement): Promise<string> => {
+  // @ts-ignore
+  const canvas: OffscreenCanvas = getImageCanvas(img);
+  const blob: Blob = await canvas.convertToBlob();
+
+  return new Promise((resolve, reject) => {
+    const reader: FileReader = new FileReader();
+    reader.onloadend = () => {
+      const base64 = reader.result?.toString();
+      if (base64) {
+        resolve(base64);
+      } else {
+        const error: Error = new Error("Не удалось получить Base64 изображения.");
+        showAlert(error.message);
+        reject(error);
+      }
+    }
+
+    reader.onerror = () => {
+      const error: Error = new Error("Ошибка при чтении Blob данных.");
+      showAlert(error.message);
+      reject(error);
+    }
+
+    reader.readAsDataURL(blob);
+  })
+}
+
+
+const save = async (): Promise<void> => {
   togglePreloader(true);
+  const json = {...editor.getJSON()};
+
+  if (json.content) {
+    for (let i = 0; i < json.content.length; i++) {
+      const item = json.content[i];
+      if (item.type === "image") {
+        const currentSrc: string = item.attrs?.src;
+        const imgID: string = item.attrs?.alt;
+        const img = document.querySelector(`img[alt=${imgID}]`);
+        if (img) {
+          if (currentSrc.startsWith("blob:") || (currentSrc.startsWith("http") && !URL_PATTERN.test(currentSrc))) {
+            item.attrs = {
+              src: await imageToBase64(img as HTMLImageElement)
+            }
+          }
+        }
+      }
+    }
+  }
+
+  console.log("json", json);
+
+  fetch("/api/upload_article/", {
+    method: "POST",
+    body: JSON.stringify(json),
+    headers: {
+      "Content-Type": "application/json"
+    }
+  })
+      .then(response => response.json())
+      .then(data => {
+        showAlert("Статья успешно загружена");
+      })
+      .catch((error) => {
+        showAlert(`Ошибка при отправке изображения: ${error}`);
+      })
+      .finally(() => {
+        togglePreloader(false);
+      });
 }
 
 
