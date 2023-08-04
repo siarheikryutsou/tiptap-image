@@ -1,12 +1,13 @@
 <template>
   <div id="editor">
-    <editor-content :editor="editor"/>
     <div class="controls">
       <input type="file" ref="elInputFile" style="display: none" @change="onFileSelect"
              :accept="allowedTypes.toString()" multiple/>
-      <button @click="onAddImageButtonClick">Add img</button>
+      <button ref="addImageButtonRef" @click="onAddImageButtonClick">Add img</button>
       <button @click="onSaveClick">Save</button>
+      <ContextMenu v-show="showContextRef" ref="contextRef" />
     </div>
+    <editor-content :editor="editor"/>
   </div>
   <img v-if="showPreloader" class="preloader" src="/preloader.svg" alt="preloader"/>
   <AlertDialog v-show="showDialogRef" ref="alertRef" />
@@ -19,6 +20,8 @@ import Image from '@tiptap/extension-image';
 import Focus from '@tiptap/extension-focus';
 import {defineComponent, ref} from "vue";
 import AlertDialog from "@/components/tip-tap-editor/AlertDialog.vue";
+import ContextMenu from "@/components/tip-tap-editor/ContextMenu.vue";
+import type {IContextData} from "@/components/tip-tap-editor/interfaces";
 
 defineComponent({
   components: {
@@ -40,9 +43,36 @@ const elInputFile = ref<HTMLInputElement>();
 const showPreloader = ref<boolean>(false);
 const alertRef = ref<typeof AlertDialog>();
 const showDialogRef = ref<boolean>(false);
+const showContextRef = ref<boolean>(false);
+const contextRef = ref<typeof  ContextMenu>();
+const addImageButtonRef = ref<HTMLButtonElement>()
 
-const onAddImageButtonClick = (): void => {
+const onAddImageButtonClick = (event:Event): void => {
+  (event.target as HTMLButtonElement).disabled = true;
+  contextRef.value?.show(addImageContext, onAddImageContextClosed);
+  showContextRef.value = true;
+}
+
+const onAddImageContextClosed = ():void => {
+  console.log("onAddImageContextClosed");
+  const button = addImageButtonRef.value;
+  if(button) button.disabled = false;
+  showContextRef.value = false;
+}
+
+
+const pickFile = ():void => {
   elInputFile.value?.click();
+}
+
+const pickURL = ():void => {
+  console.log("pick URL")
+}
+
+
+const addImageContext:IContextData = {
+  "Загрузить с компьютера": pickFile,
+  "Вставить URL": pickURL,
 }
 
 
@@ -233,7 +263,7 @@ const editor: Editor = new Editor({
 }
 
 #editor .controls {
-  margin-top: 10px;
+  margin-bottom: 10px;
 }
 
 #editor .controls button {
