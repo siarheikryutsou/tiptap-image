@@ -11,6 +11,7 @@
   </div>
   <img v-if="showPreloader" class="preloader" src="/preloader.svg" alt="preloader"/>
   <AlertDialog v-show="showDialogRef" ref="alertRef" />
+  <URLDialog v-show="showURLDialogRef" ref="urlDialogRef" />
 </template>
 
 <script setup lang="ts">
@@ -22,6 +23,7 @@ import {defineComponent, ref} from "vue";
 import AlertDialog from "@/components/tip-tap-editor/AlertDialog.vue";
 import ContextMenu from "@/components/tip-tap-editor/ContextMenu.vue";
 import type {IContextData} from "@/components/tip-tap-editor/interfaces";
+import URLDialog from "@/components/tip-tap-editor/URLDialog.vue";
 
 defineComponent({
   components: {
@@ -46,6 +48,8 @@ const showDialogRef = ref<boolean>(false);
 const showContextRef = ref<boolean>(false);
 const contextRef = ref<typeof  ContextMenu>();
 const addImageButtonRef = ref<HTMLButtonElement>()
+const showURLDialogRef = ref<boolean>();
+const urlDialogRef = ref<typeof URLDialog>();
 
 const onAddImageButtonClick = (event:Event): void => {
   (event.target as HTMLButtonElement).disabled = true;
@@ -54,7 +58,6 @@ const onAddImageButtonClick = (event:Event): void => {
 }
 
 const onAddImageContextClosed = ():void => {
-  console.log("onAddImageContextClosed");
   const button = addImageButtonRef.value;
   if(button) button.disabled = false;
   showContextRef.value = false;
@@ -66,7 +69,8 @@ const pickFile = ():void => {
 }
 
 const pickURL = ():void => {
-  console.log("pick URL")
+  showURLDialogRef.value = true;
+  urlDialogRef.value?.show(onImageURL);
 }
 
 
@@ -84,6 +88,14 @@ const showAlert = (message:string):void => {
 
 const onAlertClose = ():void => {
   showDialogRef.value = false;
+}
+
+
+const onImageURL = (url:string):void => {
+  showURLDialogRef.value = false;
+  if(url) {
+    appendImage(url);
+  }
 }
 
 
@@ -115,7 +127,6 @@ const onPaste = (view: unknown, event: ClipboardEvent): boolean => {
 }
 
 const onDrop = (view: unknown, event: DragEvent, slice: unknown, moved: boolean): boolean => {
-  console.log("onDrop");
   if (!moved && event.dataTransfer?.files?.length) {
     onFilesInput(event.dataTransfer.files);
     return true;

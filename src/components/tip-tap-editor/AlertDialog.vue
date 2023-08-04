@@ -8,7 +8,7 @@
 <script setup lang="ts">
 import {ref, defineExpose} from "vue";
 
-const dialogRef = ref<HTMLDialogElement | null>(null);
+const dialogRef = ref<HTMLDialogElement>();
 let onCloseCallbackHandler:Function | undefined;
 let messageRef = ref<string>("");
 const show = (message:string, onCloseCallback:Function): void => {
@@ -30,10 +30,5 @@ defineExpose({
 </script>
 
 <style scoped>
-
-  dialog {
-    min-width: 250px;
-    max-width: 400px;
-  }
 
 </style>
